@@ -450,9 +450,9 @@ function addNewTabWithType(terminal, agentType) {
         <div class="tab-content">
             <div class="tab-info">
                 <p class="tab-title">${agentType}</p>
-                <div class="status running">
-                    <img src="assets/ellipse-running.svg" alt="" class="status-dot">
-                    <span class="status-text">Running</span>
+                <div class="status idle">
+                    <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                    <span class="status-text">Idle</span>
                 </div>
             </div>
             <button class="icon-btn close-btn">
