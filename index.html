@@ -65,9 +65,18 @@
     </div>
 
     <div class="dropdown-menu hidden" id="agentDropdown">
-        <div class="dropdown-item" data-agent-type="Engineer">Engineer</div>
-        <div class="dropdown-divider"></div>
-        <div class="dropdown-item" data-agent-type="Planner">Planner</div>
+        <div class="dropdown-step" data-step="role">
+            <div class="dropdown-item" data-role="Engineer">Engineer</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-role="Planner">Planner</div>
+        </div>
+        <div class="dropdown-step hidden" data-step="provider">
+            <div class="dropdown-back">&larr; Back</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-provider="claude">Claude</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-provider="codex">Codex</div>
+        </div>
     </div>
 
     <script src="script.js"></script>

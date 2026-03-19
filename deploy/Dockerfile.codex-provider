@@ -1,0 +1,24 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /srv
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --omit=dev express @openai/codex-sdk
+RUN npm install -g @openai/codex
+
+COPY ../backend /srv/backend
+COPY ../services/providers/codex-server.js /srv/services/providers/codex-server.js
+
+WORKDIR /workspace
+
+ENV PORT=3101
+ENV CODEX_WORKDIR=/workspace
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+EXPOSE 3101
+
+CMD ["node", "/srv/services/providers/codex-server.js"]

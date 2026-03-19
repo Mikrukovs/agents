@@ -1,9 +1,42 @@
 services:
-  codex-demo:
+  gateway:
     build:
       context: .
-      dockerfile: deploy/Dockerfile
-    container_name: codex-demo
+      dockerfile: deploy/Dockerfile.gateway
+    container_name: agents-gateway
     ports:
       - "3000:3000"
+    environment:
+      - CODEX_SERVICE_URL=http://codex-provider:3101
+      - CLAUDE_SERVICE_URL=http://claude-provider:3102
+    volumes:
+      - ./:/app
+    depends_on:
+      - codex-provider
+      - claude-provider
+    restart: unless-stopped
+
+  codex-provider:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.codex-provider
+    container_name: codex-provider
+    environment:
+      - CODEX_WORKDIR=/workspace
+    volumes:
+      - ./:/workspace
+      - ${HOME}/.codex:/root/.codex
+    restart: unless-stopped
+
+  claude-provider:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.claude-provider
+    container_name: claude-provider
+    environment:
+      - CLAUDE_WORKDIR=/workspace
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./:/workspace
+      - ${HOME}/.claude:/root/.claude:ro
     restart: unless-stopped

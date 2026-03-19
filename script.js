@@ -149,17 +149,33 @@ function getTabSession(tabId) {
     return tabSessionState.get(tabId) || null;
 }
 
-function registerSessionForTab(tabId, sessionId, eventSource) {
+function getTabProvider(tab) {
+    if (!tab) return 'codex';
+    const direct = (tab.dataset.provider || '').trim().toLowerCase();
+    if (direct === 'codex' || direct === 'claude') return direct;
+    return 'codex';
+}
+
+function getProviderLabel(provider) {
+    return provider === 'claude' ? 'Claude' : 'Codex';
+}
+
+function getSessionMapKey(provider, sessionId) {
+    return `${provider}:${sessionId}`;
+}
+
+function registerSessionForTab(tabId, provider, sessionId, eventSource) {
     tabSessionState.set(tabId, {
+        provider,
         sessionId,
         eventSource,
         ready: false,
         readyPromise: null,
         resolveReady: null,
-        codexHeaderPrinted: false,
+        assistantHeaderPrinted: false,
         running: false
     });
-    sessionTabState.set(sessionId, tabId);
+    sessionTabState.set(getSessionMapKey(provider, sessionId), tabId);
 }
 
 async function closeTabSession(tabId) {
@@ -171,10 +187,10 @@ async function closeTabSession(tabId) {
     }
 
     tabSessionState.delete(tabId);
-    sessionTabState.delete(state.sessionId);
+    sessionTabState.delete(getSessionMapKey(state.provider, state.sessionId));
 
     try {
-        await fetch(`${apiBaseUrl}/api/codex/sessions/${state.sessionId}`, {
+        await fetch(`${apiBaseUrl}/api/${state.provider}/sessions/${state.sessionId}`, {
             method: 'DELETE'
         });
     } catch (_err) {
@@ -182,25 +198,26 @@ async function closeTabSession(tabId) {
     }
 }
 
-function handleSessionEvent(sessionId, payload) {
-    const tabId = sessionTabState.get(sessionId);
+function handleSessionEvent(provider, sessionId, payload) {
+    const tabId = sessionTabState.get(getSessionMapKey(provider, sessionId));
     if (!tabId) return;
     const tabState = getTabSession(tabId);
     if (!tabState) return;
+    const providerLabel = getProviderLabel(provider);
 
     if (payload.type === 'turn_started') {
         tabState.running = true;
-        tabState.codexHeaderPrinted = true;
+        tabState.assistantHeaderPrinted = true;
         setTabStatusById(tabId, 'running');
-        appendBlockToTab(tabId, '$ Codex\n');
+        appendBlockToTab(tabId, `$ ${providerLabel}\n`);
         persistActiveTaskState();
         return;
     }
 
     if (payload.type === 'assistant_text_delta') {
-        if (!tabState.codexHeaderPrinted) {
-            tabState.codexHeaderPrinted = true;
-            appendBlockToTab(tabId, '$ Codex\n');
+        if (!tabState.assistantHeaderPrinted) {
+            tabState.assistantHeaderPrinted = true;
+            appendBlockToTab(tabId, `$ ${providerLabel}\n`);
         }
         appendInlineToTab(tabId, payload.delta || '');
         persistActiveTaskState();
@@ -209,7 +226,7 @@ function handleSessionEvent(sessionId, payload) {
 
     if (payload.type === 'turn_complete' || payload.type === 'turn_aborted') {
         tabState.running = false;
-        tabState.codexHeaderPrinted = false;
+        tabState.assistantHeaderPrinted = false;
         setTabStatusById(tabId, 'idle');
         persistActiveTaskState();
         return;
@@ -217,26 +234,26 @@ function handleSessionEvent(sessionId, payload) {
 
     if (payload.type === 'error') {
         tabState.running = false;
-        tabState.codexHeaderPrinted = false;
+        tabState.assistantHeaderPrinted = false;
         setTabStatusById(tabId, 'idle');
-        appendBlockToTab(tabId, `$ Codex\n[error] ${payload.error || 'Codex request failed'}`);
+        appendBlockToTab(tabId, `$ ${providerLabel}\n[error] ${payload.error || `${providerLabel} request failed`}`);
         persistActiveTaskState();
     }
 }
 
-async function createSessionForTab(tabId) {
-    const response = await fetch(`${apiBaseUrl}/api/codex/sessions`, {
+async function createSessionForTab(tabId, provider) {
+    const response = await fetch(`${apiBaseUrl}/api/${provider}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
     });
     const data = await response.json();
     if (!response.ok || !data.ok || !data.sessionId) {
-        throw new Error(data?.error || 'Failed to create Codex session');
+        throw new Error(data?.error || `Failed to create ${getProviderLabel(provider)} session`);
     }
 
     const sessionId = data.sessionId;
-    const eventSource = new EventSource(`${apiBaseUrl}/api/codex/sessions/${sessionId}/events`);
+    const eventSource = new EventSource(`${apiBaseUrl}/api/${provider}/sessions/${sessionId}/events`);
     let readyResolved = false;
     eventSource.onmessage = (event) => {
         try {
@@ -249,7 +266,7 @@ async function createSessionForTab(tabId) {
                     state.resolveReady?.();
                 }
             }
-            handleSessionEvent(sessionId, payload);
+            handleSessionEvent(provider, sessionId, payload);
         } catch (_err) {
             // Ignore malformed stream event.
         }
@@ -262,13 +279,13 @@ async function createSessionForTab(tabId) {
             session.resolveReady?.();
         }
         if (!session.running) return;
-        appendBlockToTab(tabId, '$ Codex\n[error] Stream disconnected');
+        appendBlockToTab(tabId, `$ ${getProviderLabel(provider)}\n[error] Stream disconnected`);
         session.running = false;
         setTabStatusById(tabId, 'idle');
         persistActiveTaskState();
     };
 
-    registerSessionForTab(tabId, sessionId, eventSource);
+    registerSessionForTab(tabId, provider, sessionId, eventSource);
     const state = getTabSession(tabId);
     if (state) {
         state.readyPromise = new Promise((resolve) => {
@@ -278,7 +295,7 @@ async function createSessionForTab(tabId) {
     return sessionId;
 }
 
-async function ensureSessionForTab(tabId) {
+async function ensureSessionForTab(tabId, provider) {
     const state = getTabSession(tabId);
     if (state?.sessionId) {
         if (state.ready && state.readyPromise) return state.sessionId;
@@ -288,7 +305,7 @@ async function ensureSessionForTab(tabId) {
         return state.sessionId;
     }
 
-    const sessionId = await createSessionForTab(tabId);
+    const sessionId = await createSessionForTab(tabId, provider);
     const nextState = getTabSession(tabId);
     if (nextState?.readyPromise) {
         await nextState.readyPromise;
@@ -296,11 +313,13 @@ async function ensureSessionForTab(tabId) {
     return sessionId;
 }
 
-async function sendPromptToCodex(terminal, prompt) {
+async function sendPromptToAgent(terminal, prompt) {
     const activeTab = getActiveTab(terminal);
     if (!activeTab) return;
 
     const tabId = ensureTabId(activeTab);
+    const provider = getTabProvider(activeTab);
+    const providerLabel = getProviderLabel(provider);
     const tabState = getTabSession(tabId);
     if (tabState?.running) return;
 
@@ -309,8 +328,8 @@ async function sendPromptToCodex(terminal, prompt) {
     persistActiveTaskState();
 
     try {
-        const sessionId = await ensureSessionForTab(tabId);
-        const response = await fetch(`${apiBaseUrl}/api/codex/sessions/${sessionId}/messages`, {
+        const sessionId = await ensureSessionForTab(tabId, provider);
+        const response = await fetch(`${apiBaseUrl}/api/${provider}/sessions/${sessionId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: prompt })
@@ -318,7 +337,7 @@ async function sendPromptToCodex(terminal, prompt) {
         const result = await response.json().catch(() => ({ ok: false, error: 'Invalid server response' }));
         if (!response.ok || !result.ok) {
             const details = result?.details?.message || result?.error || 'Unknown error';
-            appendBlockToTab(tabId, `$ Codex\n[error] ${details}`);
+            appendBlockToTab(tabId, `$ ${providerLabel}\n[error] ${details}`);
             setTabStatus(activeTab, 'idle');
         } else {
             const currentState = getTabSession(tabId);
@@ -327,7 +346,7 @@ async function sendPromptToCodex(terminal, prompt) {
             }
         }
     } catch (error) {
-        appendBlockToTab(tabId, `$ Codex\n[error] ${error.message}`);
+        appendBlockToTab(tabId, `$ ${providerLabel}\n[error] ${error.message}`);
         setTabStatus(activeTab, 'idle');
         persistActiveTaskState();
     }
@@ -341,7 +360,7 @@ function ensureTerminalComposer(terminal) {
     const composer = document.createElement('div');
     composer.className = 'terminal-composer';
     composer.innerHTML = `
-        <input type="text" class="terminal-input" placeholder="Напиши сообщение Codex (например, привет)">
+        <input type="text" class="terminal-input" placeholder="Напиши сообщение агенту (например, привет)">
         <button type="button" class="terminal-send-btn">Send</button>
     `;
     terminalView.appendChild(composer);
@@ -353,7 +372,7 @@ function ensureTerminalComposer(terminal) {
         const value = input.value.trim();
         if (!value) return;
         input.value = '';
-        sendPromptToCodex(terminal, value);
+        sendPromptToAgent(terminal, value);
     };
 
     button.addEventListener('click', submit);
@@ -432,7 +451,7 @@ function extractAgentsFromTerminalsRoot(root) {
 
     const tabs = Array.from(root.querySelectorAll('.terminal-tab:not(.new-tab-btn)'));
     return tabs.map((tab) => {
-        const title = tab.querySelector('.tab-title')?.textContent?.trim() || 'Engineer';
+        const title = tab.querySelector('.tab-title')?.textContent?.trim() || 'Codex';
         const statusEl = tab.querySelector('.status');
         const isRunning = statusEl?.classList.contains('running');
 
@@ -597,6 +616,9 @@ function initDropdown() {
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.new-tab-btn') && !e.target.closest('.dropdown-menu')) {
             dropdown.classList.add('hidden');
+            dropdown.querySelector('[data-step="role"]').classList.remove('hidden');
+            dropdown.querySelector('[data-step="provider"]').classList.add('hidden');
+            delete dropdown.dataset.selectedRole;
             currentDropdownTerminal = null;
             document.querySelectorAll('.new-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -609,11 +631,30 @@ function initDropdown() {
             });
         }
     });
-    
+
     dropdown.addEventListener('click', (e) => {
         const item = e.target.closest('.dropdown-item');
-        if (item) {
-            const agentType = item.dataset.agentType;
+        const back = e.target.closest('.dropdown-back');
+        const roleStep = dropdown.querySelector('[data-step="role"]');
+        const providerStep = dropdown.querySelector('[data-step="provider"]');
+
+        if (back) {
+            providerStep.classList.add('hidden');
+            roleStep.classList.remove('hidden');
+            delete dropdown.dataset.selectedRole;
+            return;
+        }
+
+        if (item && item.dataset.role) {
+            dropdown.dataset.selectedRole = item.dataset.role;
+            roleStep.classList.add('hidden');
+            providerStep.classList.remove('hidden');
+            return;
+        }
+
+        if (item && item.dataset.provider) {
+            const role = dropdown.dataset.selectedRole || 'Engineer';
+            const provider = item.dataset.provider;
             const terminalByRef = currentDropdownTerminal && currentDropdownTerminal.isConnected
                 ? currentDropdownTerminal
                 : null;
@@ -622,9 +663,12 @@ function initDropdown() {
                 : null;
             const terminalElement = terminalByRef || terminalById;
             if (terminalElement) {
-                addNewTabWithType(terminalElement, agentType);
+                addNewTabWithType(terminalElement, role, provider);
             }
             dropdown.classList.add('hidden');
+            roleStep.classList.remove('hidden');
+            providerStep.classList.add('hidden');
+            delete dropdown.dataset.selectedRole;
             currentDropdownTerminal = null;
             document.querySelectorAll('.new-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -714,19 +758,20 @@ function showDropdown(button, terminal) {
     dropdown.style.top = rect.bottom + 'px';
 }
 
-function addNewTabWithType(terminal, agentType) {
+function addNewTabWithType(terminal, role, provider) {
     const tabsContainer = terminal.querySelector('.tabs-container');
     const newTabBtn = terminal.querySelector('.new-tab-btn');
-    
+
     const divider = document.createElement('div');
     divider.className = 'divider';
-    
+
+    const providerLabel = getProviderLabel(provider);
     const newTab = document.createElement('div');
     newTab.className = 'terminal-tab active';
     newTab.innerHTML = `
         <div class="tab-content">
             <div class="tab-info">
-                <p class="tab-title">${agentType}</p>
+                <p class="tab-title">${role} · ${providerLabel}</p>
                 <div class="status idle">
                     <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
                     <span class="status-text">Idle</span>
@@ -737,11 +782,12 @@ function addNewTabWithType(terminal, agentType) {
             </button>
         </div>
     `;
-    
+
     tabsContainer.insertBefore(divider, newTabBtn);
     tabsContainer.insertBefore(newTab, newTabBtn);
 
     ensureTabId(newTab);
+    newTab.dataset.provider = provider;
     tabContentState.set(newTab.dataset.tabId, '');
     bindTabEvents(newTab, terminal);
     setActiveTab(terminal, newTab);
@@ -749,7 +795,7 @@ function addNewTabWithType(terminal, agentType) {
 }
 
 function addNewTab(terminal) {
-    addNewTabWithType(terminal, 'Engineer');
+    addNewTabWithType(terminal, 'Engineer', 'codex');
 }
 
 function updateIndicatorsFromAgents(card) {
@@ -921,6 +967,9 @@ function initTerminalTabsForElement(terminal) {
         const newTab = tab.cloneNode(true);
         tab.parentNode.replaceChild(newTab, tab);
         ensureTabId(newTab);
+        if (!newTab.dataset.provider) {
+            newTab.dataset.provider = getTabProvider(newTab);
+        }
         bindTabEvents(newTab, terminal);
     });
 

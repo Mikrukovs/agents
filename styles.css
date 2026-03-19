@@ -452,3 +452,20 @@ body {
     height: 1px;
     background-color: #757575;
 }
+
+.dropdown-step.hidden {
+    display: none;
+}
+
+.dropdown-back {
+    padding: 12px;
+    font-size: 14px;
+    color: #999;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.dropdown-back:hover {
+    background-color: #141414;
+    color: white;
+}

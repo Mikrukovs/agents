@@ -2,3 +2,5 @@
 .idea
 .secrets/
 node_modules/
+
+CLAUDE.md

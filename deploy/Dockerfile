@@ -11,6 +11,7 @@ COPY ../package.json package-lock.json* ./
 RUN npm install --omit=dev
 
 RUN npm install -g @openai/codex
+RUN npm install -g @anthropic-ai/claude-code
 
 COPY .. .
 
