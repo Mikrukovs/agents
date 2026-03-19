@@ -2,7 +2,51 @@ document.addEventListener('DOMContentLoaded', () => {
     initTaskCards();
     initTerminalTabs();
     initButtons();
+    initDropdown();
 });
+
+function initDropdown() {
+    const dropdown = document.getElementById('agentDropdown');
+    
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.new-tab-btn') && !e.target.closest('.dropdown-menu')) {
+            dropdown.classList.add('hidden');
+            document.querySelectorAll('.new-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.terminal-tab.active:not(.new-tab-btn)').forEach(tab => {
+                tab.style.backgroundColor = '';
+            });
+            document.querySelectorAll('.terminal-view').forEach(view => {
+                view.style.backgroundColor = '';
+            });
+        }
+    });
+    
+    dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.dropdown-item');
+        if (item) {
+            const agentType = item.dataset.agentType;
+            const terminal = dropdown.dataset.currentTerminal;
+            if (terminal) {
+                const terminalElement = document.querySelector(`[data-terminal-id="${terminal}"]`);
+                if (terminalElement) {
+                    addNewTabWithType(terminalElement, agentType);
+                }
+            }
+            dropdown.classList.add('hidden');
+            document.querySelectorAll('.new-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.terminal-tab.active:not(.new-tab-btn)').forEach(tab => {
+                tab.style.backgroundColor = '';
+            });
+            document.querySelectorAll('.terminal-view').forEach(view => {
+                view.style.backgroundColor = '';
+            });
+        }
+    });
+}
 
 function initTaskCards() {
     const taskCards = document.querySelectorAll('.task-card');
@@ -103,10 +147,103 @@ function initTerminalTabs() {
         
         const newTabBtn = terminal.querySelector('.new-tab-btn');
         if (newTabBtn) {
-            newTabBtn.addEventListener('click', () => {
-                addNewTab(terminal);
+            newTabBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showDropdown(e.currentTarget, terminal);
             });
         }
+    });
+}
+
+function showDropdown(button, terminal) {
+    const dropdown = document.getElementById('agentDropdown');
+    const rect = button.getBoundingClientRect();
+    
+    if (!terminal.dataset.terminalId) {
+        terminal.dataset.terminalId = 'terminal-' + Date.now();
+    }
+    dropdown.dataset.currentTerminal = terminal.dataset.terminalId;
+    
+    button.classList.add('active');
+    
+    const activeTab = terminal.querySelector('.terminal-tab.active:not(.new-tab-btn)');
+    if (activeTab) {
+        activeTab.style.backgroundColor = '#2d2d2d';
+    }
+    
+    const terminalView = terminal.querySelector('.terminal-view');
+    if (terminalView) {
+        terminalView.style.backgroundColor = '#2d2d2d';
+    }
+    
+    dropdown.classList.remove('hidden');
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+}
+
+function addNewTabWithType(terminal, agentType) {
+    const tabsContainer = terminal.querySelector('.tabs-container');
+    const newTabBtn = terminal.querySelector('.new-tab-btn');
+    
+    const allTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
+    allTabs.forEach(t => {
+        t.classList.remove('active');
+        const closeBtn = t.querySelector('.close-btn');
+        if (closeBtn) closeBtn.remove();
+    });
+    
+    const divider = document.createElement('div');
+    divider.className = 'divider';
+    
+    const newTab = document.createElement('div');
+    newTab.className = 'terminal-tab active';
+    newTab.innerHTML = `
+        <div class="tab-content">
+            <div class="tab-info">
+                <p class="tab-title">${agentType}</p>
+                <div class="status running">
+                    <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                    <span class="status-text">Running</span>
+                </div>
+            </div>
+            <button class="icon-btn close-btn">
+                <img src="assets/icon-close.svg" alt="Close" class="icon">
+            </button>
+        </div>
+    `;
+    
+    tabsContainer.insertBefore(divider, newTabBtn);
+    tabsContainer.insertBefore(newTab, newTabBtn);
+    
+    newTab.addEventListener('click', (e) => {
+        if (e.target.closest('.close-btn')) return;
+        
+        const tabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
+        tabs.forEach(t => {
+            t.classList.remove('active');
+            const btn = t.querySelector('.close-btn');
+            if (btn) btn.remove();
+        });
+        
+        newTab.classList.add('active');
+        
+        const tabContent = newTab.querySelector('.tab-content');
+        if (!tabContent.querySelector('.close-btn')) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'icon-btn close-btn';
+            closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeTab(newTab, terminal);
+            });
+            tabContent.appendChild(closeBtn);
+        }
+    });
+    
+    const closeBtn = newTab.querySelector('.close-btn');
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeTab(newTab, terminal);
     });
 }
 
@@ -381,8 +518,9 @@ function initTerminalTabsForElement(terminal) {
         const newBtn = newTabBtn.cloneNode(true);
         newTabBtn.parentNode.replaceChild(newBtn, newTabBtn);
         
-        newBtn.addEventListener('click', () => {
-            addNewTab(terminal);
+        newBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showDropdown(newBtn, terminal);
         });
     }
     

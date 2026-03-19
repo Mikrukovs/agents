@@ -134,7 +134,7 @@
 
         <main class="terminals-container" data-layout="single">
             <div class="terminal-wrapper">
-                <div class="terminal">
+                <div class="terminal" data-terminal-id="terminal-1">
                     <div class="terminal-header">
                     <div class="tabs-container">
                         <div class="terminal-tab active">
@@ -192,10 +192,10 @@ Key shape:
             </div>
 
             <div class="terminal-wrapper">
-                <div class="terminal">
+                <div class="terminal" data-terminal-id="terminal-2">
                     <div class="terminal-header">
-                    <div class="tabs-container">
-                        <div class="terminal-tab active">
+                        <div class="tabs-container">
+                            <div class="terminal-tab active">
                             <div class="tab-content">
                                 <div class="tab-info">
                                     <p class="tab-title">Engineer</p>
@@ -249,6 +249,12 @@ Key shape:
                 </div>
             </div>
         </main>
+    </div>
+
+    <div class="dropdown-menu hidden" id="agentDropdown">
+        <div class="dropdown-item" data-agent-type="Engineer">Engineer</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" data-agent-type="Planner">Planner</div>
     </div>
 
     <script src="script.js"></script>
