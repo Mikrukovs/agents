@@ -1,0 +1,9 @@
+services:
+  codex-demo:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    container_name: codex-demo
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

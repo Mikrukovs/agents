@@ -22,6 +22,15 @@ let tabCounter = 0;
 let currentDropdownTerminal = null;
 let activeTaskId = null;
 let initialTerminalsMarkup = '';
+const tabSessionState = new Map();
+const sessionTabState = new Map();
+const apiBaseUrl = (() => {
+    if (window.location.port === '3000') return '';
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        return `${window.location.protocol}//${window.location.hostname}:3000`;
+    }
+    return 'http://localhost:3000';
+})();
 
 function createTabId() {
     tabCounter += 1;
@@ -86,6 +95,274 @@ function renderTerminalOutput(terminal) {
     output.textContent = tabContentState.get(tabId);
     output.contentEditable = 'true';
     output.spellcheck = false;
+}
+
+function appendToTerminal(terminal, text) {
+    const activeTab = getActiveTab(terminal);
+    if (!activeTab) return;
+
+    const tabId = ensureTabId(activeTab);
+    const current = tabContentState.get(tabId) || '';
+    const suffix = current ? '\n\n' : '';
+    tabContentState.set(tabId, `${current}${suffix}${text}`);
+    renderTerminalOutput(terminal);
+}
+
+function appendBlockToTab(tabId, text) {
+    const current = tabContentState.get(tabId) || '';
+    const suffix = current ? '\n\n' : '';
+    tabContentState.set(tabId, `${current}${suffix}${text}`);
+    renderAllTerminalOutputs();
+}
+
+function appendInlineToTab(tabId, text) {
+    const current = tabContentState.get(tabId) || '';
+    tabContentState.set(tabId, `${current}${text}`);
+    renderAllTerminalOutputs();
+}
+
+function renderAllTerminalOutputs() {
+    document.querySelectorAll('.terminal').forEach((terminal) => {
+        renderTerminalOutput(terminal);
+    });
+}
+
+function setTabStatus(tab, status) {
+    const statusEl = tab.querySelector('.status');
+    const statusText = tab.querySelector('.status-text');
+    const statusDot = tab.querySelector('.status-dot');
+    if (!statusEl || !statusText || !statusDot) return;
+
+    const running = status === 'running';
+    statusEl.classList.toggle('running', running);
+    statusEl.classList.toggle('idle', !running);
+    statusText.textContent = running ? 'Running' : 'Idle';
+    statusDot.src = `assets/${running ? 'ellipse-running.svg' : 'ellipse-idle.svg'}`;
+}
+
+function setTabStatusById(tabId, status) {
+    const tab = document.querySelector(`.terminal-tab[data-tab-id="${tabId}"]`);
+    if (tab) setTabStatus(tab, status);
+}
+
+function getTabSession(tabId) {
+    return tabSessionState.get(tabId) || null;
+}
+
+function registerSessionForTab(tabId, sessionId, eventSource) {
+    tabSessionState.set(tabId, {
+        sessionId,
+        eventSource,
+        ready: false,
+        readyPromise: null,
+        resolveReady: null,
+        codexHeaderPrinted: false,
+        running: false
+    });
+    sessionTabState.set(sessionId, tabId);
+}
+
+async function closeTabSession(tabId) {
+    const state = getTabSession(tabId);
+    if (!state) return;
+
+    if (state.eventSource) {
+        state.eventSource.close();
+    }
+
+    tabSessionState.delete(tabId);
+    sessionTabState.delete(state.sessionId);
+
+    try {
+        await fetch(`${apiBaseUrl}/api/codex/sessions/${state.sessionId}`, {
+            method: 'DELETE'
+        });
+    } catch (_err) {
+        // Ignore best-effort cleanup failures.
+    }
+}
+
+function handleSessionEvent(sessionId, payload) {
+    const tabId = sessionTabState.get(sessionId);
+    if (!tabId) return;
+    const tabState = getTabSession(tabId);
+    if (!tabState) return;
+
+    if (payload.type === 'turn_started') {
+        tabState.running = true;
+        tabState.codexHeaderPrinted = true;
+        setTabStatusById(tabId, 'running');
+        appendBlockToTab(tabId, '$ Codex\n');
+        persistActiveTaskState();
+        return;
+    }
+
+    if (payload.type === 'assistant_text_delta') {
+        if (!tabState.codexHeaderPrinted) {
+            tabState.codexHeaderPrinted = true;
+            appendBlockToTab(tabId, '$ Codex\n');
+        }
+        appendInlineToTab(tabId, payload.delta || '');
+        persistActiveTaskState();
+        return;
+    }
+
+    if (payload.type === 'turn_complete' || payload.type === 'turn_aborted') {
+        tabState.running = false;
+        tabState.codexHeaderPrinted = false;
+        setTabStatusById(tabId, 'idle');
+        persistActiveTaskState();
+        return;
+    }
+
+    if (payload.type === 'error') {
+        tabState.running = false;
+        tabState.codexHeaderPrinted = false;
+        setTabStatusById(tabId, 'idle');
+        appendBlockToTab(tabId, `$ Codex\n[error] ${payload.error || 'Codex request failed'}`);
+        persistActiveTaskState();
+    }
+}
+
+async function createSessionForTab(tabId) {
+    const response = await fetch(`${apiBaseUrl}/api/codex/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || !data.sessionId) {
+        throw new Error(data?.error || 'Failed to create Codex session');
+    }
+
+    const sessionId = data.sessionId;
+    const eventSource = new EventSource(`${apiBaseUrl}/api/codex/sessions/${sessionId}/events`);
+    let readyResolved = false;
+    eventSource.onmessage = (event) => {
+        try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'session_ready') {
+                const state = getTabSession(tabId);
+                if (state && !readyResolved) {
+                    state.ready = true;
+                    readyResolved = true;
+                    state.resolveReady?.();
+                }
+            }
+            handleSessionEvent(sessionId, payload);
+        } catch (_err) {
+            // Ignore malformed stream event.
+        }
+    };
+    eventSource.onerror = () => {
+        const session = getTabSession(tabId);
+        if (!session) return;
+        if (!session.ready) {
+            session.ready = true;
+            session.resolveReady?.();
+        }
+        if (!session.running) return;
+        appendBlockToTab(tabId, '$ Codex\n[error] Stream disconnected');
+        session.running = false;
+        setTabStatusById(tabId, 'idle');
+        persistActiveTaskState();
+    };
+
+    registerSessionForTab(tabId, sessionId, eventSource);
+    const state = getTabSession(tabId);
+    if (state) {
+        state.readyPromise = new Promise((resolve) => {
+            state.resolveReady = resolve;
+        });
+    }
+    return sessionId;
+}
+
+async function ensureSessionForTab(tabId) {
+    const state = getTabSession(tabId);
+    if (state?.sessionId) {
+        if (state.ready && state.readyPromise) return state.sessionId;
+        if (state.readyPromise) {
+            await state.readyPromise;
+        }
+        return state.sessionId;
+    }
+
+    const sessionId = await createSessionForTab(tabId);
+    const nextState = getTabSession(tabId);
+    if (nextState?.readyPromise) {
+        await nextState.readyPromise;
+    }
+    return sessionId;
+}
+
+async function sendPromptToCodex(terminal, prompt) {
+    const activeTab = getActiveTab(terminal);
+    if (!activeTab) return;
+
+    const tabId = ensureTabId(activeTab);
+    const tabState = getTabSession(tabId);
+    if (tabState?.running) return;
+
+    setTabStatus(activeTab, 'running');
+    appendBlockToTab(tabId, `$ You\n${prompt}`);
+    persistActiveTaskState();
+
+    try {
+        const sessionId = await ensureSessionForTab(tabId);
+        const response = await fetch(`${apiBaseUrl}/api/codex/sessions/${sessionId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: prompt })
+        });
+        const result = await response.json().catch(() => ({ ok: false, error: 'Invalid server response' }));
+        if (!response.ok || !result.ok) {
+            const details = result?.details?.message || result?.error || 'Unknown error';
+            appendBlockToTab(tabId, `$ Codex\n[error] ${details}`);
+            setTabStatus(activeTab, 'idle');
+        } else {
+            const currentState = getTabSession(tabId);
+            if (currentState) {
+                currentState.running = true;
+            }
+        }
+    } catch (error) {
+        appendBlockToTab(tabId, `$ Codex\n[error] ${error.message}`);
+        setTabStatus(activeTab, 'idle');
+        persistActiveTaskState();
+    }
+}
+
+function ensureTerminalComposer(terminal) {
+    const terminalView = terminal.querySelector('.terminal-view');
+    if (!terminalView) return;
+    if (terminalView.querySelector('.terminal-composer')) return;
+
+    const composer = document.createElement('div');
+    composer.className = 'terminal-composer';
+    composer.innerHTML = `
+        <input type="text" class="terminal-input" placeholder="Напиши сообщение Codex (например, привет)">
+        <button type="button" class="terminal-send-btn">Send</button>
+    `;
+    terminalView.appendChild(composer);
+
+    const input = composer.querySelector('.terminal-input');
+    const button = composer.querySelector('.terminal-send-btn');
+
+    const submit = () => {
+        const value = input.value.trim();
+        if (!value) return;
+        input.value = '';
+        sendPromptToCodex(terminal, value);
+    };
+
+    button.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+        }
+    });
 }
 
 function setActiveTab(terminal, tab) {
@@ -543,8 +820,6 @@ function toggleSplitView(wrapper) {
         const existingTerminal = wrapper.querySelector('.terminal');
         const tabs = Array.from(existingTerminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)'));
         
-        if (tabs.length <= 1) return;
-        
         const activeTab = tabs.find(t => t.classList.contains('active')) || tabs[0];
         if (activeTab) {
             setActiveTab(existingTerminal, activeTab);
@@ -614,6 +889,7 @@ function removeTab(tab, terminal) {
     
     tab.remove();
     if (tabId) {
+        closeTabSession(tabId);
         tabContentState.delete(tabId);
     }
     
@@ -671,4 +947,5 @@ function initTerminalTabsForElement(terminal) {
     }
 
     captureInitialTabState(terminal);
+    ensureTerminalComposer(terminal);
 }

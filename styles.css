@@ -345,6 +345,9 @@ body {
     flex: 1;
     padding: 32px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .terminal-output {
@@ -353,6 +356,44 @@ body {
     color: white;
     white-space: pre-wrap;
     line-height: normal;
+    flex: 1;
+    min-height: 0;
+}
+
+.terminal-composer {
+    display: flex;
+    gap: 10px;
+}
+
+.terminal-input {
+    flex: 1;
+    border: 1px solid #3d3d3d;
+    background: #101010;
+    color: #fff;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.terminal-input:focus {
+    outline: none;
+    border-color: #757575;
+}
+
+.terminal-send-btn {
+    border: 1px solid #3d3d3d;
+    background: #2d2d2d;
+    color: #fff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.terminal-send-btn:hover {
+    background: #3a3a3a;
 }
 
 ::-webkit-scrollbar {
