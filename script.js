@@ -1,9 +1,318 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const terminalsContainer = document.querySelector('.terminals-container');
+    if (terminalsContainer) {
+        initialTerminalsMarkup = terminalsContainer.innerHTML;
+    }
+
     initTaskCards();
     initTerminalTabs();
     initButtons();
     initDropdown();
+
+    const activeCard = document.querySelector('.task-card.active');
+    if (activeCard?.dataset.taskId) {
+        activeTaskId = activeCard.dataset.taskId;
+        saveTaskState(activeTaskId);
+    }
 });
+
+const tabContentState = new Map();
+const taskTerminalState = new Map();
+let tabCounter = 0;
+let currentDropdownTerminal = null;
+let activeTaskId = null;
+let initialTerminalsMarkup = '';
+
+function createTabId() {
+    tabCounter += 1;
+    return `tab-${Date.now()}-${tabCounter}`;
+}
+
+function ensureTerminalId(terminal, force = false) {
+    if (force || !terminal.dataset.terminalId) {
+        terminal.dataset.terminalId = `terminal-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    }
+}
+
+function ensureTabId(tab) {
+    if (!tab.dataset.tabId) {
+        tab.dataset.tabId = createTabId();
+    }
+    return tab.dataset.tabId;
+}
+
+function getTabs(terminal) {
+    return Array.from(terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)'));
+}
+
+function getActiveTab(terminal) {
+    return terminal.querySelector('.terminal-tab.active:not(.new-tab-btn)');
+}
+
+function getTerminalOutput(terminal) {
+    return terminal.querySelector('.terminal-view .terminal-output');
+}
+
+function ensureCloseButton(tab, terminal) {
+    const tabContent = tab.querySelector('.tab-content');
+    if (!tabContent || tabContent.querySelector('.close-btn')) return;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'icon-btn close-btn';
+    closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeTab(tab, terminal);
+    });
+    tabContent.appendChild(closeBtn);
+}
+
+function renderTerminalOutput(terminal) {
+    const output = getTerminalOutput(terminal);
+    if (!output) return;
+
+    const activeTab = getActiveTab(terminal);
+    if (!activeTab) {
+        output.textContent = '';
+        output.contentEditable = 'false';
+        return;
+    }
+
+    const tabId = ensureTabId(activeTab);
+    if (!tabContentState.has(tabId)) {
+        tabContentState.set(tabId, '');
+    }
+
+    output.textContent = tabContentState.get(tabId);
+    output.contentEditable = 'true';
+    output.spellcheck = false;
+}
+
+function setActiveTab(terminal, tab) {
+    const tabs = getTabs(terminal);
+    tabs.forEach((t) => {
+        t.classList.remove('active');
+        const closeBtn = t.querySelector('.close-btn');
+        if (closeBtn) closeBtn.remove();
+    });
+
+    tab.classList.add('active');
+    ensureCloseButton(tab, terminal);
+    renderTerminalOutput(terminal);
+}
+
+function bindTerminalOutput(terminal) {
+    const output = getTerminalOutput(terminal);
+    if (!output || output.dataset.inputBound === 'true') return;
+
+    output.dataset.inputBound = 'true';
+    output.addEventListener('input', () => {
+        const activeTab = getActiveTab(terminal);
+        if (!activeTab) return;
+
+        const tabId = ensureTabId(activeTab);
+        tabContentState.set(tabId, output.textContent);
+    });
+}
+
+function captureInitialTabState(terminal) {
+    const tabs = getTabs(terminal);
+    const output = getTerminalOutput(terminal);
+    const initialOutput = output ? output.textContent : '';
+    const activeTab = getActiveTab(terminal);
+
+    tabs.forEach((tab) => {
+        const tabId = ensureTabId(tab);
+        if (!tabContentState.has(tabId)) {
+            tabContentState.set(tabId, tab === activeTab ? initialOutput : '');
+        }
+    });
+
+    renderTerminalOutput(terminal);
+}
+
+function bindTabEvents(tab, terminal) {
+    tab.addEventListener('click', (e) => {
+        if (e.target.closest('.close-btn')) return;
+        setActiveTab(terminal, tab);
+    });
+
+    const closeBtn = tab.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeTab(tab, terminal);
+        });
+    }
+}
+
+function getTaskCardById(taskId) {
+    return document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+}
+
+function extractAgentsFromTerminalsRoot(root) {
+    if (!root) return [];
+
+    const tabs = Array.from(root.querySelectorAll('.terminal-tab:not(.new-tab-btn)'));
+    return tabs.map((tab) => {
+        const title = tab.querySelector('.tab-title')?.textContent?.trim() || 'Engineer';
+        const statusEl = tab.querySelector('.status');
+        const isRunning = statusEl?.classList.contains('running');
+
+        return {
+            name: title,
+            status: isRunning ? 'running' : 'idle'
+        };
+    });
+}
+
+function renderAgentsList(card, agents) {
+    const agentsList = card.querySelector('.agents-list');
+    if (!agentsList) return;
+
+    agentsList.innerHTML = '';
+    agents.forEach((agent) => {
+        const row = document.createElement('div');
+        row.className = 'agent-row';
+        row.innerHTML = `
+            <span class="agent-name">${agent.name}</span>
+            <div class="status ${agent.status}">
+                <img src="assets/${agent.status === 'running' ? 'ellipse-running.svg' : 'ellipse-idle.svg'}" alt="" class="status-dot">
+                <span class="status-text">${agent.status === 'running' ? 'Running' : 'Idle'}</span>
+            </div>
+        `;
+        agentsList.appendChild(row);
+    });
+}
+
+function renderTaskIndicators(card, agents) {
+    const indicators = card.querySelector('.task-indicators');
+    if (!indicators) return;
+
+    indicators.innerHTML = '';
+    agents.forEach((agent) => {
+        const dot = document.createElement('img');
+        dot.className = 'status-dot';
+        dot.src = `assets/${agent.status === 'running' ? 'ellipse-running.svg' : 'ellipse-idle.svg'}`;
+        dot.alt = '';
+        indicators.appendChild(dot);
+    });
+}
+
+function updateTaskCardFromAgents(taskId, agents) {
+    const card = getTaskCardById(taskId);
+    if (!card) return;
+
+    renderAgentsList(card, agents);
+    renderTaskIndicators(card, agents);
+    updateTaskCardView(card, card.classList.contains('active'));
+}
+
+function collectAgentsFromCurrentTerminals() {
+    const terminalsContainer = document.querySelector('.terminals-container');
+    return extractAgentsFromTerminalsRoot(terminalsContainer);
+}
+
+function collectAgentsFromMarkup(markup) {
+    if (!markup) return [];
+    const temp = document.createElement('div');
+    temp.innerHTML = markup;
+    return extractAgentsFromTerminalsRoot(temp);
+}
+
+function persistActiveTaskState() {
+    if (!activeTaskId) return;
+    saveTaskState(activeTaskId);
+}
+
+function serializeCurrentTerminalsState() {
+    const terminalsContainer = document.querySelector('.terminals-container');
+    if (!terminalsContainer) return null;
+
+    const tabContent = {};
+    const tabs = terminalsContainer.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
+    tabs.forEach((tab) => {
+        const tabId = tab.dataset.tabId;
+        if (!tabId) return;
+        tabContent[tabId] = tabContentState.get(tabId) || '';
+    });
+
+    return {
+        markup: terminalsContainer.innerHTML,
+        tabContent,
+        agents: collectAgentsFromCurrentTerminals()
+    };
+}
+
+function saveTaskState(taskId) {
+    if (!taskId) return;
+    const state = serializeCurrentTerminalsState();
+    if (!state) return;
+    taskTerminalState.set(taskId, state);
+    updateTaskCardFromAgents(taskId, state.agents || []);
+}
+
+function applyTaskTabContent(tabContent) {
+    if (!tabContent) return;
+    Object.entries(tabContent).forEach(([tabId, content]) => {
+        tabContentState.set(tabId, content);
+    });
+}
+
+function loadTaskState(taskId) {
+    const terminalsContainer = document.querySelector('.terminals-container');
+    if (!terminalsContainer || !taskId) return;
+
+    const savedState = taskTerminalState.get(taskId);
+    if (savedState) {
+        terminalsContainer.innerHTML = savedState.markup;
+        applyTaskTabContent(savedState.tabContent);
+        initTerminalTabs();
+        updateTaskCardFromAgents(taskId, savedState.agents || collectAgentsFromMarkup(savedState.markup));
+        return;
+    }
+
+    terminalsContainer.innerHTML = initialTerminalsMarkup;
+    initTerminalTabs();
+    saveTaskState(taskId);
+}
+
+function switchToTask(taskId) {
+    if (!taskId || taskId === activeTaskId) return;
+    const dropdown = document.getElementById('agentDropdown');
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+        currentDropdownTerminal = null;
+    }
+
+    if (activeTaskId) {
+        saveTaskState(activeTaskId);
+    }
+    loadTaskState(taskId);
+    activeTaskId = taskId;
+}
+
+function collapseSplitIfTerminalEmpty(terminal) {
+    const wrapper = terminal.closest('.terminal-wrapper');
+    if (!wrapper || !wrapper.classList.contains('split')) return false;
+
+    const terminals = Array.from(wrapper.querySelectorAll('.terminal'));
+    if (terminals.length <= 1) return false;
+
+    const otherTerminal = terminals.find((t) => t !== terminal);
+    if (!otherTerminal) return false;
+
+    terminal.remove();
+    wrapper.classList.remove('split');
+
+    const splitIcon = otherTerminal.querySelector('.split-icon');
+    if (splitIcon) {
+        splitIcon.src = 'assets/icon-split.svg';
+    }
+
+    initTerminalTabsForElement(otherTerminal);
+    return true;
+}
 
 function initDropdown() {
     const dropdown = document.getElementById('agentDropdown');
@@ -11,6 +320,7 @@ function initDropdown() {
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.new-tab-btn') && !e.target.closest('.dropdown-menu')) {
             dropdown.classList.add('hidden');
+            currentDropdownTerminal = null;
             document.querySelectorAll('.new-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
@@ -27,14 +337,18 @@ function initDropdown() {
         const item = e.target.closest('.dropdown-item');
         if (item) {
             const agentType = item.dataset.agentType;
-            const terminal = dropdown.dataset.currentTerminal;
-            if (terminal) {
-                const terminalElement = document.querySelector(`[data-terminal-id="${terminal}"]`);
-                if (terminalElement) {
-                    addNewTabWithType(terminalElement, agentType);
-                }
+            const terminalByRef = currentDropdownTerminal && currentDropdownTerminal.isConnected
+                ? currentDropdownTerminal
+                : null;
+            const terminalById = dropdown.dataset.currentTerminal
+                ? document.querySelector(`[data-terminal-id="${dropdown.dataset.currentTerminal}"]`)
+                : null;
+            const terminalElement = terminalByRef || terminalById;
+            if (terminalElement) {
+                addNewTabWithType(terminalElement, agentType);
             }
             dropdown.classList.add('hidden');
+            currentDropdownTerminal = null;
             document.querySelectorAll('.new-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
@@ -54,19 +368,20 @@ function initTaskCards() {
     taskCards.forEach(card => {
         card.addEventListener('click', (e) => {
             if (e.target.closest('.icon-btn')) return;
-            
-            const wasActive = card.classList.contains('active');
-            
+
             taskCards.forEach(c => {
                 c.classList.remove('active');
                 c.classList.add('collapsed');
                 updateTaskCardView(c, false);
             });
-            
-            if (!wasActive) {
-                card.classList.remove('collapsed');
-                card.classList.add('active');
-                updateTaskCardView(card, true);
+
+            card.classList.remove('collapsed');
+            card.classList.add('active');
+            updateTaskCardView(card, true);
+
+            const taskId = card.dataset.taskId;
+            if (taskId) {
+                switchToTask(taskId);
             }
         });
         
@@ -92,77 +407,18 @@ function updateTaskCardView(card, isActive) {
 
 function initTerminalTabs() {
     const terminals = document.querySelectorAll('.terminal');
-    
-    terminals.forEach(terminal => {
-        const tabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                if (e.target.closest('.close-btn')) return;
-                
-                tabs.forEach(t => {
-                    t.classList.remove('active');
-                    const closeBtn = t.querySelector('.close-btn');
-                    if (closeBtn) closeBtn.remove();
-                });
-                
-                tab.classList.add('active');
-                
-                const tabContent = tab.querySelector('.tab-content');
-                if (tabContent && !tabContent.querySelector('.close-btn')) {
-                    const closeBtn = document.createElement('button');
-                    closeBtn.className = 'icon-btn close-btn';
-                    closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
-                    closeBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        removeTab(tab, terminal);
-                    });
-                    tabContent.appendChild(closeBtn);
-                }
-            });
-        });
-        
-        const closeBtns = terminal.querySelectorAll('.close-btn');
-        closeBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const tab = btn.closest('.terminal-tab');
-                const wasActive = tab.classList.contains('active');
-                
-                const prevDivider = tab.previousElementSibling;
-                if (prevDivider && prevDivider.classList.contains('divider')) {
-                    prevDivider.remove();
-                }
-                
-                tab.remove();
-                
-                if (wasActive) {
-                    const remainingTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-                    if (remainingTabs.length > 0) {
-                        remainingTabs[0].classList.add('active');
-                    }
-                }
-            });
-        });
-        
-        const newTabBtn = terminal.querySelector('.new-tab-btn');
-        if (newTabBtn) {
-            newTabBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showDropdown(e.currentTarget, terminal);
-            });
-        }
+    terminals.forEach((terminal) => {
+        initTerminalTabsForElement(terminal);
     });
 }
 
 function showDropdown(button, terminal) {
     const dropdown = document.getElementById('agentDropdown');
     const rect = button.getBoundingClientRect();
-    
-    if (!terminal.dataset.terminalId) {
-        terminal.dataset.terminalId = 'terminal-' + Date.now();
-    }
+
+    ensureTerminalId(terminal);
     dropdown.dataset.currentTerminal = terminal.dataset.terminalId;
+    currentDropdownTerminal = terminal;
     
     button.classList.add('active');
     
@@ -184,13 +440,6 @@ function showDropdown(button, terminal) {
 function addNewTabWithType(terminal, agentType) {
     const tabsContainer = terminal.querySelector('.tabs-container');
     const newTabBtn = terminal.querySelector('.new-tab-btn');
-    
-    const allTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-    allTabs.forEach(t => {
-        t.classList.remove('active');
-        const closeBtn = t.querySelector('.close-btn');
-        if (closeBtn) closeBtn.remove();
-    });
     
     const divider = document.createElement('div');
     divider.className = 'divider';
@@ -214,103 +463,16 @@ function addNewTabWithType(terminal, agentType) {
     
     tabsContainer.insertBefore(divider, newTabBtn);
     tabsContainer.insertBefore(newTab, newTabBtn);
-    
-    newTab.addEventListener('click', (e) => {
-        if (e.target.closest('.close-btn')) return;
-        
-        const tabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-        tabs.forEach(t => {
-            t.classList.remove('active');
-            const btn = t.querySelector('.close-btn');
-            if (btn) btn.remove();
-        });
-        
-        newTab.classList.add('active');
-        
-        const tabContent = newTab.querySelector('.tab-content');
-        if (!tabContent.querySelector('.close-btn')) {
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'icon-btn close-btn';
-            closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                removeTab(newTab, terminal);
-            });
-            tabContent.appendChild(closeBtn);
-        }
-    });
-    
-    const closeBtn = newTab.querySelector('.close-btn');
-    closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeTab(newTab, terminal);
-    });
+
+    ensureTabId(newTab);
+    tabContentState.set(newTab.dataset.tabId, '');
+    bindTabEvents(newTab, terminal);
+    setActiveTab(terminal, newTab);
+    persistActiveTaskState();
 }
 
 function addNewTab(terminal) {
-    const tabsContainer = terminal.querySelector('.tabs-container');
-    const newTabBtn = terminal.querySelector('.new-tab-btn');
-    
-    const allTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-    allTabs.forEach(t => {
-        t.classList.remove('active');
-        const closeBtn = t.querySelector('.close-btn');
-        if (closeBtn) closeBtn.remove();
-    });
-    
-    const divider = document.createElement('div');
-    divider.className = 'divider';
-    
-    const newTab = document.createElement('div');
-    newTab.className = 'terminal-tab active';
-    newTab.innerHTML = `
-        <div class="tab-content">
-            <div class="tab-info">
-                <p class="tab-title">Engineer</p>
-                <div class="status running">
-                    <img src="assets/ellipse-running.svg" alt="" class="status-dot">
-                    <span class="status-text">Running</span>
-                </div>
-            </div>
-            <button class="icon-btn close-btn">
-                <img src="assets/icon-close.svg" alt="Close" class="icon">
-            </button>
-        </div>
-    `;
-    
-    tabsContainer.insertBefore(divider, newTabBtn);
-    tabsContainer.insertBefore(newTab, newTabBtn);
-    
-    newTab.addEventListener('click', (e) => {
-        if (e.target.closest('.close-btn')) return;
-        
-        const tabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-        tabs.forEach(t => {
-            t.classList.remove('active');
-            const btn = t.querySelector('.close-btn');
-            if (btn) btn.remove();
-        });
-        
-        newTab.classList.add('active');
-        
-        const tabContent = newTab.querySelector('.tab-content');
-        if (!tabContent.querySelector('.close-btn')) {
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'icon-btn close-btn';
-            closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                removeTab(newTab, terminal);
-            });
-            tabContent.appendChild(closeBtn);
-        }
-    });
-    
-    const closeBtn = newTab.querySelector('.close-btn');
-    closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeTab(newTab, terminal);
-    });
+    addNewTabWithType(terminal, 'Engineer');
 }
 
 function updateIndicatorsFromAgents(card) {
@@ -375,6 +537,7 @@ function toggleSplitView(wrapper) {
             }
             
             initTerminalTabsForElement(leftTerminal);
+            persistActiveTaskState();
         }
     } else {
         const existingTerminal = wrapper.querySelector('.terminal');
@@ -382,8 +545,10 @@ function toggleSplitView(wrapper) {
         
         if (tabs.length <= 1) return;
         
-        const activeTab = tabs.find(t => t.classList.contains('active'));
-        const otherTabs = tabs.filter(t => t !== activeTab);
+        const activeTab = tabs.find(t => t.classList.contains('active')) || tabs[0];
+        if (activeTab) {
+            setActiveTab(existingTerminal, activeTab);
+        }
         
         const leftTerminal = existingTerminal.cloneNode(true);
         const rightTerminal = existingTerminal.cloneNode(true);
@@ -430,11 +595,13 @@ function toggleSplitView(wrapper) {
         
         initTerminalTabsForElement(leftTerminal);
         initTerminalTabsForElement(rightTerminal);
+        persistActiveTaskState();
     }
 }
 
 function removeTab(tab, terminal) {
     const wasActive = tab.classList.contains('active');
+    const tabId = tab.dataset.tabId;
     
     const prevElement = tab.previousElementSibling;
     const nextElement = tab.nextElementSibling;
@@ -446,92 +613,62 @@ function removeTab(tab, terminal) {
     }
     
     tab.remove();
-    
-    if (wasActive) {
-        const remainingTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-        if (remainingTabs.length > 0) {
-            const newActiveTab = remainingTabs[0];
-            newActiveTab.classList.add('active');
-            
-            const tabContent = newActiveTab.querySelector('.tab-content');
-            if (tabContent && !tabContent.querySelector('.close-btn')) {
-                const closeBtn = document.createElement('button');
-                closeBtn.className = 'icon-btn close-btn';
-                closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
-                closeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    removeTab(newActiveTab, terminal);
-                });
-                tabContent.appendChild(closeBtn);
-            }
-        }
+    if (tabId) {
+        tabContentState.delete(tabId);
     }
+    
+    const remainingTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
+    if (remainingTabs.length === 0) {
+        if (collapseSplitIfTerminalEmpty(terminal)) {
+            persistActiveTaskState();
+            return;
+        }
+        renderTerminalOutput(terminal);
+        persistActiveTaskState();
+        return;
+    }
+
+    if (wasActive || !getActiveTab(terminal)) {
+        setActiveTab(terminal, remainingTabs[0]);
+    } else {
+        renderTerminalOutput(terminal);
+    }
+    persistActiveTaskState();
 }
 
 function initTerminalTabsForElement(terminal) {
+    ensureTerminalId(terminal, true);
+    bindTerminalOutput(terminal);
+
     const tabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-    
-    tabs.forEach(tab => {
+    tabs.forEach((tab) => {
         const newTab = tab.cloneNode(true);
         tab.parentNode.replaceChild(newTab, tab);
-        
-        newTab.addEventListener('click', (e) => {
-            if (e.target.closest('.close-btn')) return;
-            
-            const allTabs = terminal.querySelectorAll('.terminal-tab:not(.new-tab-btn)');
-            allTabs.forEach(t => {
-                t.classList.remove('active');
-                const closeBtn = t.querySelector('.close-btn');
-                if (closeBtn) closeBtn.remove();
-            });
-            
-            newTab.classList.add('active');
-            
-            const tabContent = newTab.querySelector('.tab-content');
-            if (tabContent && !tabContent.querySelector('.close-btn')) {
-                const closeBtn = document.createElement('button');
-                closeBtn.className = 'icon-btn close-btn';
-                closeBtn.innerHTML = '<img src="assets/icon-close.svg" alt="Close" class="icon">';
-                closeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    removeTab(newTab, terminal);
-                });
-                tabContent.appendChild(closeBtn);
-            }
-        });
+        ensureTabId(newTab);
+        bindTabEvents(newTab, terminal);
     });
-    
-    const closeBtns = terminal.querySelectorAll('.close-btn');
-    closeBtns.forEach(btn => {
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        newBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tab = newBtn.closest('.terminal-tab');
-            removeTab(tab, terminal);
-        });
-    });
-    
+
     const newTabBtn = terminal.querySelector('.new-tab-btn');
     if (newTabBtn) {
         const newBtn = newTabBtn.cloneNode(true);
         newTabBtn.parentNode.replaceChild(newBtn, newTabBtn);
-        
+
         newBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             showDropdown(newBtn, terminal);
         });
     }
-    
+
     const splitBtn = terminal.querySelector('.split-btn');
     if (splitBtn) {
         const newBtn = splitBtn.cloneNode(true);
         splitBtn.parentNode.replaceChild(newBtn, splitBtn);
-        
+
         newBtn.addEventListener('click', () => {
             const wrapper = terminal.closest('.terminal-wrapper');
             toggleSplitView(wrapper);
         });
     }
+
+    captureInitialTabState(terminal);
 }
