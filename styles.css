@@ -1,0 +1,366 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    background-color: #070707;
+    color: white;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+.app {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    padding: 32px;
+    gap: 32px;
+}
+
+.sidebar {
+    width: 320px;
+    height: 100%;
+    padding-right: 0;
+}
+
+.sidebar-content {
+    background-color: #252526;
+    border-radius: 32px;
+    padding: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.task-card {
+    background-color: #2d2d2d;
+    border-radius: 24px;
+    padding: 32px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.task-card.active {
+    background-color: #1d1d1d;
+}
+
+.task-card.collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.task-name {
+    font-size: 16px;
+    font-weight: 400;
+    color: white;
+    white-space: nowrap;
+}
+
+.task-card.active .task-name {
+    margin-bottom: 24px;
+}
+
+.task-card.active .task-header {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.task-card.collapsed .agents-list {
+    display: none !important;
+}
+
+.task-card.active .task-indicators {
+    display: none !important;
+}
+
+.task-indicators {
+    display: flex;
+    gap: -2px;
+    align-items: center;
+}
+
+.task-indicators .status-dot {
+    width: 8px;
+    height: 8px;
+    margin-left: -2px;
+}
+
+.task-indicators .status-dot:first-child {
+    margin-left: 0;
+}
+
+.indicator-icon {
+    width: 44px;
+    height: 16px;
+}
+
+.agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.agent-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.agent-name {
+    font-size: 14px;
+    color: white;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+}
+
+.status-text {
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.status.running .status-text {
+    color: #a4ffa7;
+    font-size: 14px;
+}
+
+.status.idle .status-text {
+    color: #d9d9d9;
+    font-size: 14px;
+}
+
+.terminals-container {
+    flex: 1;
+    display: flex;
+    gap: 12px;
+    height: 100%;
+    overflow: hidden;
+}
+
+.terminal-wrapper {
+    flex: 1;
+    display: flex;
+    gap: 24px;
+    height: 100%;
+    min-width: 0;
+}
+
+.terminal-wrapper.split {
+    gap: 8px;
+}
+
+.terminal {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-radius: 32px;
+    overflow: hidden;
+    min-width: 0;
+    min-height: 0;
+}
+
+.terminal-header {
+    background-color: #252526;
+    height: 52px;
+    display: flex;
+    align-items: stretch;
+    border-top-left-radius: 32px;
+    border-top-right-radius: 32px;
+    position: relative;
+    overflow: hidden;
+}
+
+.tabs-container {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    margin-right: 88px;
+}
+
+.tabs-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.tabs-container::-webkit-scrollbar-track {
+    background: #252526;
+    border-radius: 0;
+}
+
+.tabs-container::-webkit-scrollbar-thumb {
+    background: #3d3d3d;
+    border-radius: 3px;
+}
+
+.tabs-container::-webkit-scrollbar-thumb:hover {
+    background: #4d4d4d;
+}
+
+.terminal-wrapper.split .terminal:first-child .tabs-container {
+    margin-right: 0;
+}
+
+.terminal-tab {
+    background-color: #2d2d2d;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 10px 32px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border: none;
+    font-family: inherit;
+}
+
+.terminal-tab:hover {
+    background-color: #3d3d3d;
+}
+
+.terminal-tab.active {
+    background-color: #1d1d1d;
+    padding: 10px 16px 10px 32px;
+}
+
+.terminal-tab.new-tab-btn {
+    padding: 10px 16px;
+    justify-content: center;
+}
+
+.tab-content {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+.tab-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.tab-title {
+    font-size: 14px;
+    color: white;
+    white-space: nowrap;
+}
+
+.terminal-tab:not(.active) .tab-info {
+    opacity: 0.7;
+}
+
+.divider {
+    width: 1px;
+    height: 100%;
+    background-color: #757575;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+
+.icon-container {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon {
+    width: 24px;
+    height: 24px;
+}
+
+.split-btn {
+    background-color: #2d2d2d;
+    border: none;
+    cursor: pointer;
+    padding: 10px 32px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 10;
+}
+
+.split-btn:hover {
+    background-color: #3d3d3d;
+}
+
+.terminal-wrapper.split .terminal:first-child .split-btn {
+    display: none;
+}
+
+.terminal-wrapper.split .terminal:last-child .split-btn {
+    background-color: #3d3d3d;
+}
+
+.terminal-view {
+    background-color: #1d1d1d;
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.terminal-output {
+    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    color: white;
+    white-space: pre-wrap;
+    line-height: normal;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #3d3d3d;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4d4d4d;
+}

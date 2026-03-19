@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <div class="task-card active" data-task-id="1">
+                    <div class="task-header">
+                        <h2 class="task-name">Task_name</h2>
+                        <div class="task-indicators" style="display: none;">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                        </div>
+                    </div>
+                    <div class="agents-list">
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status idle">
+                                <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                <span class="status-text">Idle</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="task-card collapsed" data-task-id="2">
+                    <div class="task-header">
+                        <h2 class="task-name">Task_name</h2>
+                        <div class="task-indicators">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                        </div>
+                    </div>
+                    <div class="agents-list" style="display: none;">
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="task-card collapsed" data-task-id="3">
+                    <div class="task-header">
+                        <h2 class="task-name">Task_name</h2>
+                        <div class="task-indicators">
+                            <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                        </div>
+                    </div>
+                    <div class="agents-list" style="display: none;">
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status running">
+                                <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                <span class="status-text">Running</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status idle">
+                                <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                <span class="status-text">Idle</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="task-card collapsed" data-task-id="4">
+                    <div class="task-header">
+                        <h2 class="task-name">Task_name</h2>
+                        <div class="task-indicators">
+                            <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                            <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                        </div>
+                    </div>
+                    <div class="agents-list" style="display: none;">
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status idle">
+                                <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                <span class="status-text">Idle</span>
+                            </div>
+                        </div>
+                        <div class="agent-row">
+                            <span class="agent-name">Engineer</span>
+                            <div class="status idle">
+                                <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                <span class="status-text">Idle</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="terminals-container" data-layout="single">
+            <div class="terminal-wrapper">
+                <div class="terminal">
+                    <div class="terminal-header">
+                    <div class="tabs-container">
+                        <div class="terminal-tab active">
+                            <div class="tab-content">
+                                <div class="tab-info">
+                                    <p class="tab-title">Engineer</p>
+                                    <div class="status running">
+                                        <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                        <span class="status-text">Running</span>
+                                    </div>
+                                </div>
+                                <button class="icon-btn close-btn">
+                                    <img src="assets/icon-close.svg" alt="Close" class="icon">
+                                </button>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="terminal-tab">
+                            <div class="tab-content">
+                                <div class="tab-info">
+                                    <p class="tab-title">Engineer</p>
+                                    <div class="status idle">
+                                        <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                        <span class="status-text">Idle</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <button class="terminal-tab new-tab-btn">
+                            <div class="icon-container">
+                                <img src="assets/icon-add.svg" alt="Add" class="icon">
+                            </div>
+                        </button>
+                    </div>
+                    <button class="split-btn">
+                        <img src="assets/icon-split.svg" alt="Split" class="icon split-icon">
+                    </button>
+                </div>
+                <div class="terminal-view">
+                    <pre class="terminal-output">$ claude
+
+[run] Building the next prototype from business-design.md
+
+Key shape:
+- Task Grid grouped by role
+- inline add per role
+- runtime only for pinned instances
+- no global top bar
+
+
+</pre>
+                </div>
+                </div>
+            </div>
+
+            <div class="terminal-wrapper">
+                <div class="terminal">
+                    <div class="terminal-header">
+                    <div class="tabs-container">
+                        <div class="terminal-tab active">
+                            <div class="tab-content">
+                                <div class="tab-info">
+                                    <p class="tab-title">Engineer</p>
+                                    <div class="status running">
+                                        <img src="assets/ellipse-running.svg" alt="" class="status-dot">
+                                        <span class="status-text">Running</span>
+                                    </div>
+                                </div>
+                                <button class="icon-btn close-btn">
+                                    <img src="assets/icon-close.svg" alt="Close" class="icon">
+                                </button>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="terminal-tab">
+                            <div class="tab-content">
+                                <div class="tab-info">
+                                    <p class="tab-title">Engineer</p>
+                                    <div class="status idle">
+                                        <img src="assets/ellipse-idle.svg" alt="" class="status-dot">
+                                        <span class="status-text">Idle</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <button class="terminal-tab new-tab-btn">
+                            <div class="icon-container">
+                                <img src="assets/icon-add.svg" alt="Add" class="icon">
+                            </div>
+                        </button>
+                    </div>
+                    <button class="split-btn">
+                        <img src="assets/icon-split.svg" alt="Split" class="icon split-icon">
+                    </button>
+                </div>
+                <div class="terminal-view">
+                    <pre class="terminal-output">$ Claude
+
+[run] Building the next prototype from business-design.md
+
+Key shape:
+- Task Grid grouped by role
+- inline add per role
+- runtime only for pinned instances
+- no global top bar
+
+
+</pre>
+                </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
